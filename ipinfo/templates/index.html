@@ -1,0 +1,58 @@
+{% load static %}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>dPhish IP Info</title>
+</head>
+<body>
+    <h1>IP Information Lookup</h1>
+
+    <textarea id="ipInput" rows="5" placeholder="Enter IPs, one per line"></textarea>
+
+    <br><br>
+
+    <button onclick="submitIPs()">Submit IPs</button>
+
+    <h2>Results</h2>
+    <div id="results"></div>
+
+    <script>
+        async function submitIPs() {
+            const ipInput = document.getElementById('ipInput').value;
+            const ips = ipInput.split('\n').map(ip => ip.trim()).filter(ip => ip);
+            const response = await fetch('/process-ips/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ ips }),
+            });
+            const data = await response.json();
+            if (data.error) {
+                alert(data.error);
+                return;
+            }
+            const taskId = data.task_id;
+            document.getElementById('results').innerHTML = `<p>Task ID: ${taskId}</p>`;
+            connectWebSocket(taskId);
+        }
+
+        function connectWebSocket(taskId) {
+            const ws = new WebSocket(`ws://${window.location.host}/ws/task/${taskId}/`);
+            ws.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                const resultDiv = document.getElementById('results');
+                const result = data.result.error ?
+                    `Error for ${data.ip}: ${data.result.error}` :
+                    `IP: ${data.ip}<br>City: ${data.result.city || 'N/A'}, Country: ${data.result.country || 'N/A'}, Org: ${data.result.org || 'N/A'}`;
+                resultDiv.innerHTML += `<div>${result}</div><br>`;
+            };
+            ws.onclose = function() {
+                console.log('WebSocket closed');
+            };
+        }
+    </script>
+</body>
+</html>
